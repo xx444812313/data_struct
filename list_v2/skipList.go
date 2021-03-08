@@ -1,7 +1,11 @@
-//跳表
+//跳表实现（两层索引）
 package list_v2
 
-import "fmt"
+import (
+	"fmt"
+	"math"
+	"time"
+)
 
 //跳表对象(有两层索引）
 type SkipList struct {
@@ -26,138 +30,155 @@ type node struct {
 	nextLevel *node //指向下一层
 }
 
-func showSkipLinkedList(link linkedList, name int) {
-	var currentNode *node
-	currentNode = link.Head
-	for {
-		i := 1
-		fmt.Print(name, "-node:", currentNode.data)
-		if currentNode.next == nil {
-			break
-		} else {
-			currentNode = currentNode.next
-		}
-		if name == 1 {
-			fmt.Print("-------->")
-		} else if name == 2 {
-			for i <= 3 {
-				fmt.Print("-------->")
-				i++
-			}
-		} else {
-			for i <= 7 {
-				fmt.Print("-------->")
-				i++
-			}
-		}
+var ARROW_CHAR = "--"
+
+func (sl *SkipList) PrintAll() {
+	twoList := make([]string, 0) //二级索引
+	oneList := make([]string, 0) //一级索引
+	list := make([]string, 0)    //数据层
+
+	//数据层
+	current := sl.List.Head
+	for current != nil {
+		list = append(list, fmt.Sprintf("%v", current.data))
+		current = current.next
+		list = append(list, ARROW_CHAR)
 	}
-	fmt.Println("")
+
+	//一级索引
+	current = sl.List.Head
+	a := sl.FirstIndex.Head
+	for current != nil {
+		if a != nil && current == a.nextLevel {
+			oneList = append(oneList, fmt.Sprintf("%v", a.data))
+			a = a.next
+		} else {
+			oneList = append(oneList, ARROW_CHAR)
+		}
+		current = current.next
+		oneList = append(oneList, ARROW_CHAR)
+	}
+
+	//二级索引
+	current = sl.List.Head
+	b := sl.SecondIndex.Head
+	for current != nil {
+		if b != nil && current == b.nextLevel.nextLevel {
+			twoList = append(twoList, fmt.Sprintf("%v", b.data))
+			b = b.next
+		} else {
+			twoList = append(twoList, ARROW_CHAR)
+		}
+		current = current.next
+		twoList = append(twoList, ARROW_CHAR)
+	}
+
+	fmt.Println(twoList)
+	fmt.Println(oneList)
+	fmt.Println(list)
 }
 
 func (sl *SkipList) InitSkip(list []int) {
-	sl.List = linkedList{}
-	sl.FirstIndex = linkedList{}
-	sl.SecondIndex = linkedList{}
+	sl.List = initList()
+	sl.FirstIndex = initList()
+	sl.FirstIndex.Head.nextLevel = sl.List.Head
+	sl.SecondIndex = initList()
+	sl.SecondIndex.Head.nextLevel = sl.FirstIndex.Head
+
 	var currentNode *node
 	for i := 0; i < len(list); i++ {
 		currentNode = new(node)
 		currentNode.data = list[i]
 		addNode(sl, currentNode)
-		//insertToLink(&sl.List, currentNode)
 	}
-	showSkipList(*sl)
+}
+
+func initList() linkedList {
+	res := linkedList{}
+	res.Head = &node{data: math.MinInt32}
+	res.Tail = res.Head
+	return res
 }
 
 //查找
 func (sl *SkipList) Find(x int) bool {
-	var current *node
-	current = sl.SecondIndex.Head
-	if x < current.data {
+	_, _, val := sl.find(x)
+	if val.data == x {
+		return true
+	} else {
 		return false
 	}
+}
+
+//查找
+func (sl *SkipList) find(x int) (*node, *node, *node) {
+	var a, b, c *node
+	a = sl.SecondIndex.Head
 	for {
-		if x > current.data {
-			current = current.next
-		} else if x < current.data { //比当前数据节点小，则到下一层查找
-			if current.prev.nextLevel == nil { //当前是最底层了，没有找到
-				return false
+		if x > a.data {
+			if a.next == nil {
+				break
 			}
-			current = current.prev.nextLevel.next
+			a = a.next
+		} else if x < a.data {
+			a = a.prev
+			break
 		} else {
-			return true
+			return a, a.nextLevel, a.nextLevel.nextLevel
 		}
+	}
+	b = a.nextLevel
+	for {
+		if x > b.data {
+			if b.next == nil {
+				break
+			}
+			b = b.next
+		} else if x < b.data {
+			b = b.prev
+			break
+		} else {
+			return a, b, b.nextLevel
+		}
+	}
+	c = b.nextLevel
+
+	for {
+		if x > c.data {
+			if c.next == nil {
+				break
+			}
+			c = c.next
+		} else if x < c.data {
+			c = c.prev
+			break
+		} else {
+			break
+		}
+	}
+	return a, b, c
+}
+
+func (sl *SkipList) Add(x int) {
+	_, b, c := sl.find(x)
+	if c.data == x {
+		return
+	}
+
+	newNode := &node{data: x, prev: c, next: c.next}
+	c.next.prev = newNode
+	c.next = newNode
+
+	flag := time.Now().Second() & 1
+	if flag == 1 {
+		secondNewNode := &node{data: x, prev: b, next: b.next, nextLevel: newNode}
+		b.next.prev = secondNewNode
+		b.next = secondNewNode
 	}
 }
 
-func (sl *SkipList) add(x int) {
-	var current *node
-	current = sl.SecondIndex.Head
-	if current.data == x {
-		fmt.Println(x, " Had existed in skipList")
-		return
-	}
-	if x < current.data {
-		//
-		newNode2 := new(node)
-		newNode2.data = x
-		newNode2.next = sl.SecondIndex.Head
-		sl.SecondIndex.Head.prev = newNode2
-		sl.SecondIndex.Head = newNode2
+func (sl *SkipList) Del(x int) {
 
-		newNode1 := new(node)
-		newNode1.data = x
-		newNode1.next = sl.FirstIndex.Head
-		sl.FirstIndex.Head.prev = newNode1
-		sl.FirstIndex.Head = newNode1
-
-		newNode := new(node)
-		newNode.data = x
-		newNode.next = sl.List.Head
-		sl.SecondIndex.Head.prev = newNode
-		sl.List.Head = newNode
-		return
-	}
-	for {
-		if x > current.data {
-			if current.next == nil {
-				if current.nextLevel != nil {
-					current = current.nextLevel
-				} else {
-					//插入
-					newNode := new(node)
-					newNode.data = x
-					current.next = newNode
-					newNode.prev = current
-					return
-				}
-			} else {
-				current = current.next
-			}
-		} else if x < current.data {
-			//向下去寻找第一个大于x的值
-			if current.prev.nextLevel != nil {
-				current = current.prev.nextLevel.next
-			} else {
-				//插入
-				newNode := new(node)
-				newNode.data = x
-				current.prev.next = newNode
-				newNode.next = current
-				current.prev = newNode
-				return
-			}
-		} else {
-			fmt.Println(current.data)
-			return
-		}
-	}
-}
-func showSkipList(sl SkipList) {
-	showSkipLinkedList(sl.SecondIndex, 3)
-	fmt.Println("")
-	showSkipLinkedList(sl.FirstIndex, 2)
-	fmt.Println("")
-	showSkipLinkedList(sl.List, 1)
 }
 
 func addNode(skipList *SkipList, t *node) {
@@ -178,12 +199,8 @@ func addNode(skipList *SkipList, t *node) {
 
 //链表插入新节点（尾插法）
 func (list *linkedList) addDataNode(t *node) {
-	if list.Head == nil { //链表为空
-		list.Head, list.Tail = t, t
-	} else {
-		list.Tail.next = t
-		t.prev = list.Tail
-		list.Tail = t
-	}
+	list.Tail.next = t
+	t.prev = list.Tail
+	list.Tail = t
 	list.Length++
 }
