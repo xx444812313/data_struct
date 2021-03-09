@@ -4,6 +4,8 @@ package list_v2
 import (
 	"fmt"
 	"math"
+	"math/rand"
+	"strconv"
 	"time"
 )
 
@@ -31,7 +33,9 @@ type node struct {
 }
 
 var ARROW_CHAR = "--"
+var RAND *rand.Rand
 
+//打印跳表
 func (sl *SkipList) PrintAll() {
 	twoList := make([]string, 0) //二级索引
 	oneList := make([]string, 0) //一级索引
@@ -40,7 +44,7 @@ func (sl *SkipList) PrintAll() {
 	//数据层
 	current := sl.List.Head
 	for current != nil {
-		list = append(list, fmt.Sprintf("%v", current.data))
+		list = append(list, current.value())
 		current = current.next
 		list = append(list, ARROW_CHAR)
 	}
@@ -50,7 +54,7 @@ func (sl *SkipList) PrintAll() {
 	a := sl.FirstIndex.Head
 	for current != nil {
 		if a != nil && current == a.nextLevel {
-			oneList = append(oneList, fmt.Sprintf("%v", a.data))
+			oneList = append(oneList, a.value())
 			a = a.next
 		} else {
 			oneList = append(oneList, ARROW_CHAR)
@@ -64,7 +68,7 @@ func (sl *SkipList) PrintAll() {
 	b := sl.SecondIndex.Head
 	for current != nil {
 		if b != nil && current == b.nextLevel.nextLevel {
-			twoList = append(twoList, fmt.Sprintf("%v", b.data))
+			twoList = append(twoList, b.value())
 			b = b.next
 		} else {
 			twoList = append(twoList, ARROW_CHAR)
@@ -78,19 +82,15 @@ func (sl *SkipList) PrintAll() {
 	fmt.Println(list)
 }
 
-func (sl *SkipList) InitSkip(list []int) {
+func NewSkipList() SkipList {
+	sl := SkipList{}
 	sl.List = initList()
 	sl.FirstIndex = initList()
 	sl.FirstIndex.Head.nextLevel = sl.List.Head
 	sl.SecondIndex = initList()
 	sl.SecondIndex.Head.nextLevel = sl.FirstIndex.Head
-
-	var currentNode *node
-	for i := 0; i < len(list); i++ {
-		currentNode = new(node)
-		currentNode.data = list[i]
-		addNode(sl, currentNode)
-	}
+	RAND = rand.New(rand.NewSource(time.Now().Unix()))
+	return sl
 }
 
 func initList() linkedList {
@@ -110,7 +110,7 @@ func (sl *SkipList) Find(x int) bool {
 	}
 }
 
-//查找
+//查找(二级索引、一级索引、数据节点）
 func (sl *SkipList) find(x int) (*node, *node, *node) {
 	var a, b, c *node
 	a = sl.SecondIndex.Head
@@ -121,7 +121,7 @@ func (sl *SkipList) find(x int) (*node, *node, *node) {
 			}
 			a = a.next
 		} else if x < a.data {
-			a = a.prev
+			a = a.prev //退到上一个小于x的节点
 			break
 		} else {
 			return a, a.nextLevel, a.nextLevel.nextLevel
@@ -142,7 +142,6 @@ func (sl *SkipList) find(x int) (*node, *node, *node) {
 		}
 	}
 	c = b.nextLevel
-
 	for {
 		if x > c.data {
 			if c.next == nil {
@@ -159,42 +158,60 @@ func (sl *SkipList) find(x int) (*node, *node, *node) {
 	return a, b, c
 }
 
-func (sl *SkipList) Add(x int) {
-	_, b, c := sl.find(x)
+func (sl *SkipList) Add(x int) bool {
+	a, b, c := sl.find(x)
 	if c.data == x {
-		return
+		return false
 	}
 
 	newNode := &node{data: x, prev: c, next: c.next}
-	c.next.prev = newNode
+	if c.next != nil {
+		c.next.prev = newNode
+	}
 	c.next = newNode
 
-	flag := time.Now().Second() & 1
-	if flag == 1 {
-		secondNewNode := &node{data: x, prev: b, next: b.next, nextLevel: newNode}
-		b.next.prev = secondNewNode
-		b.next = secondNewNode
-	}
-}
-
-func (sl *SkipList) Del(x int) {
-
-}
-
-func addNode(skipList *SkipList, t *node) {
-	skipList.List.addDataNode(t)
-	if skipList.FirstIndex.Length == 0 || ((skipList.List.Length-1)%2 == 0 && skipList.List.Length > 2) {
-		newNode := new(node)
-		newNode.data = t.data
-		newNode.nextLevel = t
-		skipList.FirstIndex.addDataNode(newNode)
-		if skipList.SecondIndex.Length == 0 || ((skipList.FirstIndex.Length-1)%2 == 0 && skipList.FirstIndex.Length > 2) {
-			newNode2 := new(node)
-			newNode2.data = t.data
-			newNode2.nextLevel = newNode
-			skipList.SecondIndex.addDataNode(newNode2)
+	indexNew := RAND.Intn(21)
+	if indexNew < 10 {
+		indexNode := &node{data: x, prev: b, next: b.next, nextLevel: newNode}
+		if b.next != nil {
+			b.next.prev = indexNode
+		}
+		b.next = indexNode
+		if indexNew < 5 {
+			twoIndexNode := &node{data: x, prev: a, next: a.next, nextLevel: indexNode}
+			if a.next != nil {
+				a.next.prev = twoIndexNode
+			}
+			a.next = twoIndexNode
 		}
 	}
+	return true
+}
+
+func (sl *SkipList) Del(x int) bool {
+	a, b, c := sl.find(x)
+	if c.data != x {
+		return false
+	}
+	c.prev.next = c.next
+	if c.next != nil {
+		c.next.prev = c.prev
+	}
+
+	if b.data == x { //删除一级索引
+		b.prev.next = b.next
+		if b.next != nil {
+			b.next.prev = b.prev
+		}
+	}
+
+	if a.data == x { //删除二级索引
+		a.prev.next = a.next
+		if a.next != nil {
+			a.next.prev = a.prev
+		}
+	}
+	return true
 }
 
 //链表插入新节点（尾插法）
@@ -204,3 +221,31 @@ func (list *linkedList) addDataNode(t *node) {
 	list.Tail = t
 	list.Length++
 }
+
+func (n node) value() string {
+	val := strconv.Itoa(n.data)
+	if 0 <= n.data && n.data < 10 {
+		return "0" + val
+	}
+	return val
+}
+
+//func main() {
+//	data := []int{11, 12, 13, 19, 21, 31, 33, 42, 43, 51, 62}
+//	sl := list_v2.NewSkipList()
+//	for _,d := range data{
+//		sl.Add(d)
+//	}
+//	sl.PrintAll()
+//
+//	sl.Add(1)
+//	sl.Add(2)
+//	sl.Add(3)
+//	sl.PrintAll()
+//
+//
+//	fmt.Println(sl.Del(21))
+//	fmt.Println(sl.Del(3))
+//	sl.PrintAll()
+//
+//}
