@@ -1,4 +1,6 @@
-//跳表实现（两层索引）
+/**
+跳表实现（两层索引）
+ */
 package list_v2
 
 import (
@@ -18,18 +20,18 @@ type SkipList struct {
 
 //链表对象
 type linkedList struct {
-	Head   *node
-	Tail   *node
+	Head   *skipNode
+	Tail   *skipNode
 	Length int
 	Level  int
 }
 
 //数据节点对象
-type node struct {
+type skipNode struct {
 	data      int //数据
-	next      *node
-	prev      *node
-	nextLevel *node //指向下一层
+	next      *skipNode
+	prev      *skipNode
+	nextLevel *skipNode //指向下一层
 }
 
 var ARROW_CHAR = "--"
@@ -95,7 +97,7 @@ func NewSkipList() SkipList {
 
 func initList() linkedList {
 	res := linkedList{}
-	res.Head = &node{data: math.MinInt32}
+	res.Head = &skipNode{data: math.MinInt32}
 	res.Tail = res.Head
 	return res
 }
@@ -111,8 +113,8 @@ func (sl *SkipList) Find(x int) bool {
 }
 
 //查找(二级索引、一级索引、数据节点）
-func (sl *SkipList) find(x int) (*node, *node, *node) {
-	var a, b, c *node
+func (sl *SkipList) find(x int) (*skipNode, *skipNode, *skipNode) {
+	var a, b, c *skipNode
 	a = sl.SecondIndex.Head
 	for {
 		if x > a.data {
@@ -164,7 +166,7 @@ func (sl *SkipList) Add(x int) bool {
 		return false
 	}
 
-	newNode := &node{data: x, prev: c, next: c.next}
+	newNode := &skipNode{data: x, prev: c, next: c.next}
 	if c.next != nil {
 		c.next.prev = newNode
 	}
@@ -172,13 +174,13 @@ func (sl *SkipList) Add(x int) bool {
 
 	indexNew := RAND.Intn(21)
 	if indexNew < 10 {
-		indexNode := &node{data: x, prev: b, next: b.next, nextLevel: newNode}
+		indexNode := &skipNode{data: x, prev: b, next: b.next, nextLevel: newNode}
 		if b.next != nil {
 			b.next.prev = indexNode
 		}
 		b.next = indexNode
 		if indexNew < 5 {
-			twoIndexNode := &node{data: x, prev: a, next: a.next, nextLevel: indexNode}
+			twoIndexNode := &skipNode{data: x, prev: a, next: a.next, nextLevel: indexNode}
 			if a.next != nil {
 				a.next.prev = twoIndexNode
 			}
@@ -215,14 +217,14 @@ func (sl *SkipList) Del(x int) bool {
 }
 
 //链表插入新节点（尾插法）
-func (list *linkedList) addDataNode(t *node) {
+func (list *linkedList) addDataNode(t *skipNode) {
 	list.Tail.next = t
 	t.prev = list.Tail
 	list.Tail = t
 	list.Length++
 }
 
-func (n node) value() string {
+func (n skipNode) value() string {
 	val := strconv.Itoa(n.data)
 	if 0 <= n.data && n.data < 10 {
 		return "0" + val
